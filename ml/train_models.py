@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import os
 import sys
 import joblib
@@ -11,6 +12,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from core.scheduler_fcfs import run_fcfs
 from core.scheduler_sjf import run_sjf
+from core.scheduler_rr import run_rr
 
 def load_data(filepath):
     """Loads dataset using pandas"""
@@ -19,7 +21,8 @@ def load_data(filepath):
 def train_burst_predictor(df):
     print("Training Model 1: Burst Predictor...")
     # Features & Target
-    X = df[['CPU_Percent', 'IO_Write_Bytes', 'Num_Ctx_Switches']]
+    features_cols = ['CPU_Percent', 'IO_Write_Bytes', 'Num_Ctx_Switches']
+    X = df[features_cols]
     y = df['Actual_Burst_Time']
     
     # Train-test split for evaluation
@@ -34,6 +37,11 @@ def train_burst_predictor(df):
     r2 = r2_score(y_test, predictions)
     print(f"-> Burst Predictor R² Score: {r2:.4f}")
     
+    # Feature Importance
+    importances = model.feature_importances_
+    feat_importances = sorted(zip(features_cols, importances), key=lambda x: x[1], reverse=True)
+    print(f"-> Feature Importances: {feat_importances}")
+    
     # Train on full dataset before saving
     final_model = RandomForestRegressor(n_estimators=100, random_state=42)
     final_model.fit(X, y)
@@ -45,7 +53,7 @@ def train_burst_predictor(df):
     print(f"-> Saved model to {save_path}\n")
 
 def generate_queue_features(df, batch_size=10):
-    print("Generating Queue-level Features for Model 2...")
+    print("Generating Queue-level Features for Model 2 (4 Algorithms)...")
     
     queues = []
     targets = []
@@ -58,11 +66,10 @@ def generate_queue_features(df, batch_size=10):
         
         # Calculate Queue-level features
         mean_cpu_percent = batch['CPU_Percent'].mean()
-        
-        # pandas var defaults to ddof=1, returning NaN for n=1. We handle it safely.
         variance_cpu_percent = batch['CPU_Percent'].var() if len(batch) > 1 else 0.0
         mean_io = batch['IO_Write_Bytes'].mean()
         variance_burst_time = batch['Actual_Burst_Time'].var() if len(batch) > 1 else 0.0
+        
         if pd.isna(variance_cpu_percent): variance_cpu_percent = 0.0
         if pd.isna(variance_burst_time): variance_burst_time = 0.0
         
@@ -72,18 +79,24 @@ def generate_queue_features(df, batch_size=10):
             jobs.append({
                 "Process_ID": int(row['Process_ID']),
                 "Arrival_Time": int(row['Arrival_Time']),
-                # During this data generation step, we use the Actual_Burst_Time
                 "Burst_Time": int(row['Actual_Burst_Time']) 
             })
             
-        fcfs_outcome = run_fcfs(jobs)
-        sjf_outcome = run_sjf(jobs)
+        # Run all 4 candidates
+        res_fcfs = run_fcfs(jobs)
+        res_sjf = run_sjf(jobs, preemptive=False)
+        res_srtf = run_sjf(jobs, preemptive=True)
+        res_rr = run_rr(jobs, quantum=4)
         
-        wt_fcfs = fcfs_outcome['average_waiting_time']
-        wt_sjf = sjf_outcome['average_waiting_time']
+        outcomes = {
+            0: res_fcfs['average_waiting_time'],
+            1: res_sjf['average_waiting_time'],
+            2: res_srtf['average_waiting_time'],
+            3: res_rr['average_waiting_time']
+        }
         
-        # Target label definition: 1 if SJF is strictly better, 0 otherwise
-        target = 1 if wt_sjf < wt_fcfs else 0
+        # Target is the index of the minimum waiting time
+        target = min(outcomes, key=outcomes.get)
         
         queues.append({
             'mean_cpu_percent': mean_cpu_percent,
@@ -96,9 +109,8 @@ def generate_queue_features(df, batch_size=10):
     return pd.DataFrame(queues), pd.Series(targets)
 
 def train_algo_selector(X, y):
-    print("Training Model 2: Algorithm Selector...")
+    print("Training Model 2: Multi-class Algorithm Selector (FCFS=0, SJF=1, SRTF=2, RR=3)...")
     
-    # Check if we have enough data to split
     if len(X) > 1:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         model = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -107,8 +119,9 @@ def train_algo_selector(X, y):
         preds = model.predict(X_test)
         acc = accuracy_score(y_test, preds)
         print(f"-> Algorithm Selector Accuracy: {acc * 100:.2f}%")
-    else:
-        print("-> Not enough data batches for a test split. Training on all available data.")
+        
+        from sklearn.metrics import classification_report
+        print(classification_report(y_test, preds, target_names=['FCFS', 'SJF', 'SRTF', 'RR'], labels=[0,1,2,3]))
     
     # Train on full dataset
     final_model = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -121,7 +134,6 @@ def train_algo_selector(X, y):
 
 if __name__ == "__main__":
     try:
-        # Resolve dataset absolute path gracefully
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         dataset_path = os.path.join(project_root, 'data', 'synthetic_os_jobs.csv')
         
@@ -141,4 +153,6 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"Pipeline Failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)

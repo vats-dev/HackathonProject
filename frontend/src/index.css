@@ -2,83 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap');
-
 @layer base {
-  * {
-    @apply box-border;
-  }
-
-  html {
-    @apply scroll-smooth;
-  }
-
   body {
-    @apply bg-background font-sans text-text-main antialiased;
-    font-feature-settings: "kern" 1, "liga" 1;
-  }
-
-  h1, h2, h3 {
-    @apply font-serif;
+    @apply bg-dark-bg text-slate-200 antialiased overflow-hidden;
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
   }
 }
 
-@layer components {
-  .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-8 py-4 
-           bg-primary text-white rounded-full font-sans font-medium text-sm
-           tracking-wide transition-all duration-300 
-           hover:bg-primary-light hover:shadow-elevated hover:-translate-y-0.5
-           focus:outline-none focus:ring-2 focus:ring-primary/40;
-  }
-
-  .btn-outline {
-    @apply inline-flex items-center justify-center gap-2 px-8 py-4
-           bg-transparent text-primary rounded-full font-sans font-medium text-sm
-           tracking-wide border border-primary/30 transition-all duration-300
-           hover:bg-primary/5 hover:border-primary
-           focus:outline-none focus:ring-2 focus:ring-primary/20;
-  }
-
-  .option-card {
-    @apply w-full p-5 rounded-2xl border border-border-light bg-surface
-           text-left font-sans font-medium text-text-main text-sm
-           transition-all duration-200 cursor-pointer
-           hover:border-primary hover:bg-primary-muted hover:shadow-soft;
-  }
-
-  .option-card.selected {
-    @apply border-primary bg-primary-muted shadow-soft;
-  }
-
-  .section-label {
-    @apply text-xs font-sans font-medium tracking-[0.15em] uppercase text-accent-sage;
-  }
-
-  .card {
-    @apply bg-surface rounded-3xl shadow-card overflow-hidden;
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  .gradient-text {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #1B3B36 0%, #7C9A92 100%);
-  }
-}
-
-/* Custom scrollbar */
+/* Custom scrollbar for dark theme */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #FAF9F6;
+  background: rgba(0, 0, 0, 0.2);
 }
 ::-webkit-scrollbar-thumb {
-  background: #C9B99A;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
